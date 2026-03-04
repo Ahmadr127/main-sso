@@ -1,0 +1,109 @@
+/**
+ * Sidebar Styles - Smooth transitions without flicker
+ * Uses CSS-driven width changes instead of JavaScript DOM manipulation
+ */
+
+/* CSS Variables for sidebar width */
+:root {
+    --sidebar-width: 16rem; /* Default: expanded (w-64 = 256px = 16rem) */
+    --sidebar-collapsed-width: 5rem; /* w-20 = 80px = 5rem */
+    --sidebar-transition: width 300ms ease-in-out;
+}
+
+/* Prevent FOUC/flicker: hide dropdowns until Alpine is ready */
+[x-cloak] { 
+    display: none !important; 
+}
+
+/* But sidebar should be visible immediately on desktop */
+@media (min-width: 1024px) {
+    .sidebar[x-cloak] {
+        display: flex !important;
+    }
+}
+
+/* Global overflow prevention */
+html, body {
+    overflow-x: hidden;
+    max-width: 100%;
+}
+
+/* Sidebar base styles with CSS-driven width */
+.sidebar {
+    width: var(--sidebar-width);
+    transition: var(--sidebar-transition);
+    will-change: width;
+}
+
+/* When collapsed class is on html, sidebar is narrow */
+.sidebar-collapsed .sidebar {
+    width: var(--sidebar-collapsed-width);
+}
+
+/* Text visibility using opacity instead of x-show (no DOM detach) */
+.sidebar-text {
+    opacity: 1;
+    transition: opacity 150ms ease-in-out;
+    white-space: nowrap;
+    overflow: hidden;
+}
+
+.sidebar-collapsed .sidebar-text {
+    opacity: 0;
+    width: 0;
+    visibility: hidden;
+}
+
+/* Icon margin adjustment */
+.sidebar-icon {
+    transition: margin 150ms ease-in-out;
+}
+
+.sidebar-collapsed .sidebar-icon {
+    margin-right: 0 !important;
+}
+
+/* Custom Scrollbar for Sidebar */
+.sidebar-scroll::-webkit-scrollbar {
+    width: 6px;
+}
+
+.sidebar-scroll::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 10px;
+}
+
+.sidebar-scroll::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 10px;
+}
+
+.sidebar-scroll::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.3);
+}
+
+/* For Firefox */
+.sidebar-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.2) rgba(255, 255, 255, 0.05);
+}
+
+/* Mobile sidebar - use transform for slide */
+@media (max-width: 1023px) {
+    .sidebar {
+        transform: translateX(-100%);
+        transition: transform 300ms ease-in-out;
+        width: 16rem !important; /* Always full width on mobile */
+    }
+    
+    .sidebar.mobile-open {
+        transform: translateX(0);
+    }
+}
+
+/* Desktop: sidebar is always visible, just changes width */
+@media (min-width: 1024px) {
+    .sidebar {
+        transform: translateX(0) !important;
+    }
+}
