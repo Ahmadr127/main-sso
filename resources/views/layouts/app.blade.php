@@ -146,6 +146,18 @@
                 </div>
                 @endif
 
+                {{-- SSO Client Management --}}
+                @if(auth()->user()->hasPermission('manage_sso_clients'))
+                <div class="mb-4">
+                    <a href="{{ route('sso.clients.index') }}" 
+                       class="sidebar-link flex items-center px-4 py-3 text-white rounded-lg hover:bg-green-800 transition-colors {{ request()->routeIs('sso.*') ? 'bg-green-800' : '' }}" 
+                       title="SSO Clients">
+                        <i class="fas fa-plug w-5 sidebar-icon mr-3"></i>
+                        <span class="sidebar-text">SSO Clients</span>
+                    </a>
+                </div>
+                @endif
+
             </nav>
         </div>
 

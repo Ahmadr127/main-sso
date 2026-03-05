@@ -8,6 +8,7 @@ use App\Http\Controllers\RoleController;
 use App\Http\Controllers\PermissionController;
 use App\Http\Controllers\OrganizationTypeController;
 use App\Http\Controllers\OrganizationUnitController;
+use App\Http\Controllers\SsoClientController;
 
 /*
 |--------------------------------------------------------------------------
@@ -71,6 +72,15 @@ Route::middleware('auth')->group(function () {
             ->name('organization-units.remove-member');
         Route::patch('organization-units/{organization_unit}/head', [OrganizationUnitController::class, 'updateHead'])
             ->name('organization-units.update-head');
+    });
+
+    // SSO Client Management routes
+    Route::middleware('permission:manage_sso_clients')->prefix('sso')->group(function () {
+        Route::get('/clients', [SsoClientController::class, 'index'])->name('sso.clients.index');
+        Route::get('/clients/create', [SsoClientController::class, 'create'])->name('sso.clients.create');
+        Route::post('/clients', [SsoClientController::class, 'store'])->name('sso.clients.store');
+        Route::delete('/clients/{clientId}', [SsoClientController::class, 'destroy'])->name('sso.clients.destroy');
+        Route::get('/integration-guide', fn() => view('sso.integration-guide'))->name('sso.integration-guide');
     });
 
 });

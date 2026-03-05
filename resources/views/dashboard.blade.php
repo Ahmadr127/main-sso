@@ -8,9 +8,12 @@
     <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
         <div class="p-6">
             <h2 class="text-2xl font-bold text-gray-900 mb-2">Selamat Datang, {{ $user->name }}!</h2>
-            <p class="text-gray-600">Dashboard Library RS - Sistem Manajemen Perpustakaan</p>
+            <p class="text-gray-600">Dashboard SSO — Sistem Manajemen Akses Terpusat</p>
         </div>
     </div>
+
+    {{-- SSO Apps Section --}}
+    <x-sso-buttons :clients="$ssoClients" />
 
     <!-- Quick Actions Card -->
     <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
@@ -49,6 +52,18 @@
                     <div>
                         <div class="text-purple-900 font-medium">Kelola Permission</div>
                         <div class="text-sm text-purple-600">Manajemen izin akses</div>
+                    </div>
+                </a>
+                @endif
+
+                @if($user->hasPermission('manage_sso_clients'))
+                <a href="{{ route('sso.clients.index') }}" class="flex items-center p-4 bg-teal-50 rounded-lg hover:bg-teal-100 transition-colors group">
+                    <div class="w-10 h-10 bg-teal-600 rounded-lg flex items-center justify-center mr-4 group-hover:bg-teal-700 transition-colors">
+                        <i class="fas fa-plug text-white"></i>
+                    </div>
+                    <div>
+                        <div class="text-teal-900 font-medium">SSO Clients</div>
+                        <div class="text-sm text-teal-600">Kelola sistem terintegrasi</div>
                     </div>
                 </a>
                 @endif
