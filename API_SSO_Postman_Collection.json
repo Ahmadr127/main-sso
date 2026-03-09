@@ -1,0 +1,185 @@
+{
+    "info": {
+        "_postman_id": "api-sso-collection",
+        "name": "Moble Azra - Local API SSO",
+        "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+    },
+    "item": [
+        {
+            "name": "1. Main SSO - Generate Token",
+            "request": {
+                "method": "POST",
+                "header": [
+                    {
+                        "key": "Accept",
+                        "value": "application/json"
+                    }
+                ],
+                "body": {
+                    "mode": "formdata",
+                    "formdata": [
+                        {
+                            "key": "login",
+                            "value": "superadmin",
+                            "type": "text"
+                        },
+                        {
+                            "key": "password",
+                            "value": "password",
+                            "type": "text"
+                        }
+                    ]
+                },
+                "url": {
+                    "raw": "{{main_sso_url}}/api/login",
+                    "host": [
+                        "{{main_sso_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "login"
+                    ]
+                }
+            },
+            "response": []
+        },
+        {
+            "name": "2. PUM - SSO Login Exchange",
+            "request": {
+                "method": "POST",
+                "header": [
+                    {
+                        "key": "Accept",
+                        "value": "application/json"
+                    }
+                ],
+                "body": {
+                    "mode": "formdata",
+                    "formdata": [
+                        {
+                            "key": "access_token",
+                            "value": "<PASTE_MAIN_SSO_TOKEN_HERE>",
+                            "type": "text",
+                            "description": "Token obtained from Step 1"
+                        }
+                    ]
+                },
+                "url": {
+                    "raw": "{{pum_url}}/api/sso-login",
+                    "host": [
+                        "{{pum_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "sso-login"
+                    ]
+                }
+            },
+            "response": []
+        },
+        {
+            "name": "3. PUM - Get Current User",
+            "request": {
+                "method": "GET",
+                "header": [
+                    {
+                        "key": "Accept",
+                        "value": "application/json"
+                    },
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer <PASTE_PUM_SANCTUM_TOKEN_HERE>",
+                        "description": "Token obtained from Step 2"
+                    }
+                ],
+                "url": {
+                    "raw": "{{pum_url}}/api/user",
+                    "host": [
+                        "{{pum_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "user"
+                    ]
+                }
+            },
+            "response": []
+        },
+        {
+            "name": "4. Supplychain - SSO Login Exchange",
+            "request": {
+                "method": "POST",
+                "header": [
+                    {
+                        "key": "Accept",
+                        "value": "application/json"
+                    }
+                ],
+                "body": {
+                    "mode": "formdata",
+                    "formdata": [
+                        {
+                            "key": "access_token",
+                            "value": "<PASTE_MAIN_SSO_TOKEN_HERE>",
+                            "type": "text",
+                            "description": "Token obtained from Step 1"
+                        }
+                    ]
+                },
+                "url": {
+                    "raw": "{{supplychain_url}}/api/sso-login",
+                    "host": [
+                        "{{supplychain_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "sso-login"
+                    ]
+                }
+            },
+            "response": []
+        },
+        {
+            "name": "5. Supplychain - Get Current User",
+            "request": {
+                "method": "GET",
+                "header": [
+                    {
+                        "key": "Accept",
+                        "value": "application/json"
+                    },
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer <PASTE_SUPPLYCHAIN_SANCTUM_TOKEN_HERE>",
+                        "description": "Token obtained from Step 4"
+                    }
+                ],
+                "url": {
+                    "raw": "{{supplychain_url}}/api/user",
+                    "host": [
+                        "{{supplychain_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "user"
+                    ]
+                }
+            },
+            "response": []
+        }
+    ],
+    "variable": [
+        {
+            "key": "main_sso_url",
+            "value": "http://main-sso.test"
+        },
+        {
+            "key": "pum_url",
+            "value": "http://pum.test"
+        },
+        {
+            "key": "supplychain_url",
+            "value": "http://supplychain.test"
+        }
+    ]
+}
