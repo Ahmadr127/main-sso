@@ -11,6 +11,30 @@ use Illuminate\Support\Facades\Hash;
 class OrganizationUsersSeeder extends Seeder
 {
     /**
+     * Extract first and last name only (without middle names and titles)
+     * Takes text before comma, then extracts first and last word
+     */
+    private function extractNameWithoutTitle($fullName)
+    {
+        // Get text before the first comma
+        $parts = explode(',', $fullName);
+        $name = trim($parts[0]);
+        
+        // Split by spaces and get first and last word
+        $words = array_filter(explode(' ', $name));
+        $words = array_values($words); // Re-index array
+        
+        if (count($words) == 0) {
+            return '';
+        } elseif (count($words) == 1) {
+            return $words[0];
+        } else {
+            // Return first and last name only
+            return $words[0] . ' ' . $words[count($words) - 1];
+        }
+    }
+
+    /**
      * Seed users based on organizational structure from image
      */
     public function run(): void
@@ -83,22 +107,22 @@ class OrganizationUsersSeeder extends Seeder
         $staffRole = Role::firstOrCreate(['name' => 'staff'], ['display_name' => 'Staff']);
 
         $usersData = [
-            ['nik' => '20141969', 'name' => 'DIENI ANANDA PUTRI, DR., MARS', 'username' => 'dieni.ananda', 'email' => 'dieni.ananda@azra.com', 'org_code' => 'MUTU', 'role' => $managerRole],
-            ['nik' => '20061105', 'name' => 'GARCINIA SATIVA FIZRIA SETIADI, Dr, MKM', 'username' => 'garcinia.sativa', 'email' => 'garcinia.sativa@azra.com', 'org_code' => 'PENMED', 'role' => $managerRole],
+            ['nik' => '20141969', 'name' => 'DIENI ANANDA PUTRI, DR., MARS', 'username' => 'dieni.putri', 'email' => 'dieni.putri@azra.com', 'org_code' => 'MUTU', 'role' => $managerRole],
+            ['nik' => '20061105', 'name' => 'GARCINIA SATIVA FIZRIA SETIADI, Dr, MKM', 'username' => 'garcinia.setiadi', 'email' => 'garcinia.setiadi@azra.com', 'org_code' => 'PENMED', 'role' => $managerRole],
             ['nik' => '20253017', 'name' => 'INDRA THALIB, B.SN., MM', 'username' => 'indra.thalib', 'email' => 'indra.thalib@azra.com', 'org_code' => 'SDM', 'role' => $managerRole],
             ['nik' => '20253030', 'name' => 'IRMA RISMAYANTI, dr, MM', 'username' => 'irma.rismayanti', 'email' => 'irma.rismayanti@azra.com', 'org_code' => 'DIR', 'role' => $hospitalDirectorRole],
             ['nik' => '19950015', 'name' => 'LAILA AZRA, DRA.', 'username' => 'laila.azra', 'email' => 'laila.azra@azra.com', 'org_code' => 'PTASP', 'role' => $presidentRole],
             ['nik' => '20253062', 'name' => 'LILI MARLIANI, DR., MARS', 'username' => 'lili.marliani', 'email' => 'lili.marliani@azra.com', 'org_code' => 'PELMED', 'role' => $managerRole],
             ['nik' => '20212767', 'name' => 'METRI JULIANTI, SE', 'username' => 'metri.julianti', 'email' => 'metri.julianti@azra.com', 'org_code' => 'KEU', 'role' => $managerRole],
-            ['nik' => '20071107', 'name' => 'M. RANGGA ADITYA', 'username' => 'm.rangga', 'email' => 'm.rangga@azra.com', 'org_code' => 'PTASP', 'role' => $directorRole],
+            ['nik' => '20071107', 'name' => 'M. RANGGA ADITYA', 'username' => 'm.aditya', 'email' => 'm.aditya@azra.com', 'org_code' => 'PTASP', 'role' => $directorRole],
             ['nik' => '20242964', 'name' => 'MUHAMAD MIFTAHUDIN, M. KOM', 'username' => 'muhamad.miftahudin', 'email' => 'muhamad.miftahudin@azra.com', 'org_code' => 'IT', 'role' => $adminRole],
             ['nik' => '20242967', 'name' => 'RIA FAJARROHMI, SE', 'username' => 'ria.fajarrohmi', 'email' => 'ria.fajarrohmi@azra.com', 'org_code' => 'AKPAJ', 'role' => $headRole],
             ['nik' => '20111600', 'name' => 'RIYADI MAULANA, SH., MH., CLA., CCD', 'username' => 'riyadi.maulana', 'email' => 'riyadi.maulana@azra.com', 'org_code' => 'LEGAL', 'role' => $managerRole],
-            ['nik' => '19940189', 'name' => 'SENI MAULIDA FITALOKA, S.Kep,Ns, M.Kep', 'username' => 'seni.maulida', 'email' => 'seni.maulida@azra.com', 'org_code' => 'DIVKEP', 'role' => $managerRole],
+            ['nik' => '19940189', 'name' => 'SENI MAULIDA FITALOKA, S.Kep,Ns, M.Kep', 'username' => 'seni.fitaloka', 'email' => 'seni.fitaloka@azra.com', 'org_code' => 'DIVKEP', 'role' => $managerRole],
             ['nik' => '20020462', 'name' => 'SITI KHOIRIAH', 'username' => 'siti.khoiriah', 'email' => 'siti.khoiriah@azra.com', 'org_code' => 'SEKR', 'role' => $staffRole],
-            ['nik' => '20253070', 'name' => 'THORIO FARIED ISHAQ, S.I. KOM', 'username' => 'thorio.faried', 'email' => 'thorio.faried@azra.com', 'org_code' => 'UMUM', 'role' => $managerRole],
-            ['nik' => '20253008', 'name' => 'TUMPAS BANGKIT PRAYUDA, SE', 'username' => 'tumpas.bangkit', 'email' => 'tumpas.bangkit@azra.com', 'org_code' => 'MARK', 'role' => $managerRole],
-            ['nik' => '20242988', 'name' => 'VERONIKA RINI HANDAYANI, A. MD', 'username' => 'veronika.rini', 'email' => 'veronika.rini@azra.com', 'org_code' => 'SEKR', 'role' => $staffRole],
+            ['nik' => '20253070', 'name' => 'THORIO FARIED ISHAQ, S.I. KOM', 'username' => 'thorio.ishaq', 'email' => 'thorio.ishaq@azra.com', 'org_code' => 'UMUM', 'role' => $managerRole],
+            ['nik' => '20253008', 'name' => 'TUMPAS BANGKIT PRAYUDA, SE', 'username' => 'tumpas.prayuda', 'email' => 'tumpas.prayuda@azra.com', 'org_code' => 'MARK', 'role' => $managerRole],
+            ['nik' => '20242988', 'name' => 'VERONIKA RINI HANDAYANI, A. MD', 'username' => 'veronika.handayani', 'email' => 'veronika.handayani@azra.com', 'org_code' => 'SEKR', 'role' => $staffRole],
             // Additional users
             ['nik' => '99999002', 'name' => 'Admin System', 'username' => 'admin', 'email' => 'admin@azra.com', 'org_code' => 'IT', 'role' => $adminRole],
         ];
