@@ -4,6 +4,7 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\UserController;
+use App\Http\Controllers\UserImportController;
 use App\Http\Controllers\RoleController;
 use App\Http\Controllers\PermissionController;
 use App\Http\Controllers\OrganizationTypeController;
@@ -44,6 +45,9 @@ Route::middleware('auth')->group(function () {
     // User Management routes
     Route::middleware('permission:manage_users')->group(function () {
         Route::resource('users', UserController::class);
+        Route::get('users-import', [UserImportController::class, 'showImportForm'])->name('users.import');
+        Route::post('users-import', [UserImportController::class, 'import'])->name('users.import.process');
+        Route::get('users-import/template', [UserImportController::class, 'downloadTemplate'])->name('users.import.template');
     });
 
     // Role Management routes
