@@ -18,16 +18,10 @@ class DatabaseSeeder extends Seeder
             RolePermissionSeeder::class,
             OrganizationTypeSeeder::class,
             OrganizationUnitSeeder::class,
+            OrganizationUsersSeeder::class, // Create organization users from structure
         ]);
 
-        // Create admin user
-        $adminRole = \App\Models\Role::where('name', 'admin')->first();
-        
-        User::factory()->create([
-            'name' => 'Administrator',
-            'username' => 'admin',
-            'email' => 'admin@example.com',
-            'role_id' => $adminRole->id,
-        ]);
+        // NOTE: Admin user creation is now handled by OrganizationUsersSeeder
+        $this->command->info('Admin user creation is now handled by OrganizationUsersSeeder');
     }
 }
