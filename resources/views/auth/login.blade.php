@@ -131,7 +131,7 @@
             <!-- App Name -->
             <h1 class="text-5xl font-bold mb-4 text-center">Sistem</h1>
             <p class="text-xl text-green-100 text-center max-w-md">
-                Sistem Starterpack
+                Main SSO
             </p>
         </div>
     </div>
