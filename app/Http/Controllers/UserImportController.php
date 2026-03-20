@@ -185,7 +185,7 @@ class UserImportController extends Controller
                             'name' => $name,
                             'username' => $username,
                             'email' => $email,
-                            'password' => Hash::make('password'),
+                            'password' => Hash::make('rsazra'),
                             'role_id' => $role->id,
                             'organization_unit_id' => $orgUnit ? $orgUnit->id : null,
                         ]);

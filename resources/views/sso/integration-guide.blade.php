@@ -103,8 +103,9 @@ SSO_REDIRECT_URI=https://sistem-klien-anda.com/auth/sso/callback</code></pre>
             {{-- Syarat Akun --}}
             <div class="bg-red-50 border border-red-200 rounded-lg p-4 text-sm text-red-700">
                 <i class="fas fa-exclamation-triangle mr-1"></i>
-                <strong>Syarat Login SSO:</strong> Akun user di <strong>{{ config('app.name') }}</strong> harus memiliki <code>NIK</code> dan <code>username</code> yang terisi.
-                Jika belum, user akan diarahkan ke halaman profil untuk melengkapinya.
+                <strong>Syarat Login SSO:</strong> Akun user di <strong>{{ config('app.name') }}</strong> harus memiliki <code>NIK</code> yang terisi.
+                NIK digunakan sebagai <strong>identifier utama</strong> untuk mencocokkan user antara SSO dan sistem klien.
+                Kolom <code>email</code> dan <code>username</code> bersifat opsional dan akan otomatis disinkronisasi jika tersedia.
             </div>
 
             {{-- routes/web.php di klien --}}
@@ -158,16 +159,26 @@ Route::get('/auth/sso/callback', function (Request $request) {
         ->get(env('SSO_BASE_URL') . '/api/user')
         ->json();
 
-    // d. Buat atau update user lokal
-    $localUser = User::updateOrCreate(
-        ['email' => $ssoUser['email']],
-        [
+    // d. Cari atau buat user lokal — hanya berdasarkan NIK
+    $localUser = User::where('nik', $ssoUser['nik'])->first();
+
+    if ($localUser) {
+        // Update data yang ada
+        $localUser->update([
             'name'     => $ssoUser['name'],
-            'nik'      => $ssoUser['nik'],
-            'username' => $ssoUser['username'],
-            'password' => bcrypt(Str::random(32)), // password random — login via SSO
-        ]
-    );
+            'email'    => $ssoUser['email']    ?? $localUser->email,
+            'username' => $ssoUser['username'] ?? $localUser->username,
+        ]);
+    } else {
+        // Buat user baru
+        $localUser = User::create([
+            'nik'      => $ssoUser['nik'],          // REQUIRED
+            'name'     => $ssoUser['name'],
+            'email'    => $ssoUser['email']    ?? null, // optional
+            'username' => $ssoUser['username'] ?? null, // optional
+            'password' => bcrypt(Str::random(32)),   // random — login via SSO
+        ]);
+    }
 
     // e. Login lokal
     Auth::login($localUser, true);
@@ -224,18 +235,18 @@ Route::get('/auth/sso/callback', function (Request $request) {
                 <table class="text-xs w-full">
                     <thead><tr class="bg-gray-50"><th class="text-left p-2 rounded-tl-lg border">Field</th><th class="text-left p-2 rounded-tr-lg border">Keterangan</th></tr></thead>
                     <tbody class="divide-y divide-gray-100">
-                        <tr><td class="p-2 font-mono border-x"><code>id</code></td><td class="p-2 border-x text-gray-600">ID user di SSO</td></tr>
-                        <tr><td class="p-2 font-mono border-x"><code>name</code></td><td class="p-2 border-x text-gray-600">Nama lengkap</td></tr>
-                        <tr><td class="p-2 font-mono border-x"><code>nik</code></td><td class="p-2 border-x text-gray-600">NIK (identifier utama)</td></tr>
-                        <tr><td class="p-2 font-mono border-x"><code>username</code></td><td class="p-2 border-x text-gray-600">Username login</td></tr>
-                        <tr><td class="p-2 font-mono border-x"><code>email</code></td><td class="p-2 border-x text-gray-600">Email (untuk updateOrCreate)</td></tr>
+                        <tr><td class="p-2 font-mono border-x"><code>id</code></td><td class="p-2 border-x text-gray-600">ID user di SSO (jangan jadikan FK)</td></tr>
+                         <tr><td class="p-2 font-mono border-x"><code>name</code></td><td class="p-2 border-x text-gray-600">Nama lengkap</td></tr>
+                        <tr class="bg-yellow-50"><td class="p-2 font-mono border-x font-bold"><code>nik</code></td><td class="p-2 border-x text-gray-700 font-bold">⭐ Identifier Utama (WAJIB di klien)</td></tr>
+                        <tr><td class="p-2 font-mono border-x"><code>username</code></td><td class="p-2 border-x text-gray-600">Opsional — disinkronisasi jika ada</td></tr>
+                        <tr><td class="p-2 font-mono border-x"><code>email</code></td><td class="p-2 border-x text-gray-600">Opsional — disinkronisasi jika ada</td></tr>
                         <tr><td class="p-2 font-mono border-x"><code>role</code></td><td class="p-2 border-x text-gray-600">Role di SSO (id, name, display_name)</td></tr>
                         <tr><td class="p-2 font-mono border-x border-b rounded-b"><code>organization_unit</code></td><td class="p-2 border-x border-b text-gray-600">Unit organisasi (id, name)</td></tr>
                     </tbody>
                 </table>
                 <div class="bg-blue-50 border border-blue-200 rounded-lg p-3 text-xs text-blue-700">
                     <i class="fas fa-lightbulb mr-1"></i>
-                    Rekomendasi: gunakan <code>nik</code> sebagai primary identifier di sistem klien, bukan <code>id</code> SSO.
+                    <strong>Rekomendasi:</strong> tabel <code>users</code> di sistem klien cukup memiliki kolom <code>nik</code> sebagai identifier wajib. Kolom <code>email</code> dan <code>username</code> opsional namun tetap disarankan.
                 </div>
             </div>
         </div>
