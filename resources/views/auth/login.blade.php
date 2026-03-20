@@ -13,7 +13,7 @@
                     <img src="{{ asset('images/logo.png') }}" alt="Logo" class="h-16 object-contain" />
                 </div>
                 <h2 class="text-2xl font-bold text-gray-800">Sistem</h2>
-                <p class="text-sm text-gray-600">Sistem Starterpack</p>
+                <p class="text-sm text-gray-600">Main SSO</p>
             </div>
 
             <!-- Login Card -->
