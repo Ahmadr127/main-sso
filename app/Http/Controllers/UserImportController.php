@@ -36,7 +36,7 @@ class UserImportController extends Controller
             return $words[0];
         } else {
             // Return first and last name only
-            return $words[0] . ' ' . $words[count($words) - 1];
+            return $words[0] . ' ' . $words[1];
         }
     }
 
@@ -258,3 +258,4 @@ class UserImportController extends Controller
         return response()->download($temp_file, $filename)->deleteFileAfterSend(true);
     }
 }
+

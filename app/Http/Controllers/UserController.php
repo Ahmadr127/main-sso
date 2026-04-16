@@ -34,9 +34,14 @@ class UserController extends Controller
             $query->where('created_at', '<=', $request->date_to);
         }
 
+        if ($request->filled('role_id')) {
+            $query->where('role_id', $request->role_id);
+        }
+
         $users = $query->latest()->paginate(10)->withQueryString();
-        
-        return view('users.index', compact('users'));
+        $roles = Role::all();
+
+        return view('users.index', compact('users', 'roles'));
     }
 
     public function create()
@@ -121,3 +126,4 @@ class UserController extends Controller
         return redirect()->route('users.index')->with('success', 'User berhasil dihapus!');
     }
 }
+
