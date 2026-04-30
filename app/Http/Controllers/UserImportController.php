@@ -88,128 +88,122 @@ class UserImportController extends Controller
 
             $orgType = \App\Models\OrganizationType::where('name', 'department')->first();
 
-            // Process rows in chunks to avoid one giant transaction holding too many locks
-            $chunks = array_chunk($rows, 50);
+            // PostgreSQL: wrap each row in its own transaction
+            // so one failed row does NOT abort subsequent rows (unlike MySQL)
+            foreach ($rows as $index => $row) {
+                $rowNumber = $index + 2;
 
-            foreach ($chunks as $chunk) {
+                if (empty(array_filter($row))) {
+                    continue;
+                }
+
                 DB::beginTransaction();
-
                 try {
-                    foreach ($chunk as $index => $row) {
-                        $rowNumber = $index + 2;
+                    $nik              = trim($row[1] ?? '');
+                    $name             = trim($row[2] ?? '');
+                    $organizationName = trim($row[3] ?? '');
+                    $roleName         = trim($row[5] ?? 'staff');
 
-                        if (empty(array_filter($row))) {
-                            continue;
-                        }
+                    if (!$nik || !$name) {
+                        DB::rollBack();
+                        $errors[] = "Baris {$rowNumber}: NIK dan Nama wajib diisi";
+                        continue;
+                    }
 
-                        try {
-                            $nik             = trim($row[1] ?? '');
-                            $name            = trim($row[2] ?? '');
-                            $organizationName = trim($row[3] ?? '');
-                            $roleName        = trim($row[5] ?? 'staff');
-
-                            if (!$nik || !$name) {
-                                $errors[] = "Baris {$rowNumber}: NIK dan Nama wajib diisi";
+                    // --- Organization Unit (cached, safe against duplicate codes) ---
+                    $orgUnit = null;
+                    if ($organizationName) {
+                        if (isset($orgUnitCache[$organizationName])) {
+                            // Already cached — just find by ID
+                            $orgUnit = OrganizationUnit::find($orgUnitCache[$organizationName]['id']);
+                        } else {
+                            if (!$orgType) {
+                                DB::rollBack();
+                                $errors[] = "Baris {$rowNumber}: Organization Type 'department' tidak ditemukan";
                                 continue;
                             }
 
-                            // --- Organization Unit (cached) ---
-                            $orgUnit = null;
-                            if ($organizationName) {
-                                if (isset($orgUnitCache[$organizationName])) {
-                                    $orgUnit = OrganizationUnit::find($orgUnitCache[$organizationName]['id']);
-                                } else {
-                                    if (!$orgType) {
-                                        $errors[] = "Baris {$rowNumber}: Organization Type 'department' tidak ditemukan";
-                                        continue;
-                                    }
-
-                                    $baseCode = strtoupper(substr(preg_replace('/[^A-Za-z0-9]/', '', $organizationName), 0, 10));
-                                    $code     = $baseCode;
-                                    $counter  = 1;
-                                    while (OrganizationUnit::where('code', $code)->exists()) {
-                                        $code = $baseCode . $counter++;
-                                    }
-
-                                    $orgUnit = OrganizationUnit::create([
-                                        'name'    => $organizationName,
-                                        'code'    => $code,
-                                        'type_id' => $orgType->id,
-                                    ]);
-
-                                    // Update cache
-                                    $orgUnitCache[$organizationName] = $orgUnit->toArray();
-                                }
-                            }
-
-                            // --- Role (cached) ---
-                            $roleSlug = strtolower(str_replace(' ', '_', $roleName));
-                            if (isset($roleCache[$roleSlug])) {
-                                $role = Role::find($roleCache[$roleSlug]['id']);
-                            } else {
-                                $role = Role::create([
-                                    'name'         => $roleSlug,
-                                    'display_name' => $roleName,
-                                    'description'  => "Role {$roleName}",
-                                ]);
-                                if (!empty($managerPermissions)) {
-                                    $role->permissions()->sync($managerPermissions);
-                                }
-                                $roleCache[$roleSlug] = $role->toArray();
-                            }
-
-                            // --- Username (unique) ---
-                            $nameWithoutTitle = $this->extractNameWithoutTitle($name);
-                            $baseUsername = strtolower(str_replace(' ', '.', preg_replace('/[^A-Za-z0-9\s]/', '', $nameWithoutTitle)));
-                            $username = $baseUsername;
+                            // Generate unique code
+                            $baseCode = strtoupper(substr(preg_replace('/[^A-Za-z0-9]/', '', $organizationName), 0, 10));
+                            $code     = $baseCode;
                             $counter  = 1;
-                            while (User::where('username', $username)->where('nik', '!=', $nik)->exists()) {
-                                $username = $baseUsername . $counter++;
+                            while (OrganizationUnit::where('code', $code)->exists()) {
+                                $code = $baseCode . $counter++;
                             }
 
-                            // --- Email (unique) ---
-                            $email   = $username . '@azra.com';
-                            $counter = 1;
-                            while (User::where('email', $email)->where('nik', '!=', $nik)->exists()) {
-                                $email = $baseUsername . $counter++ . '@azra.com';
-                            }
+                            // Use firstOrCreate by name to avoid duplicate inserts
+                            $orgUnit = OrganizationUnit::firstOrCreate(
+                                ['name' => $organizationName],
+                                ['code' => $code, 'type_id' => $orgType->id]
+                            );
 
-                            // --- Create or Update User ---
-                            $user = User::where('nik', $nik)->first();
-                            if ($user) {
-                                $user->update([
-                                    'name'                 => $name,
-                                    'username'             => $username,
-                                    'email'                => $email,
-                                    'role_id'              => $role->id,
-                                    'organization_unit_id' => $orgUnit ? $orgUnit->id : null,
-                                ]);
-                            } else {
-                                $user = User::create([
-                                    'nik'                  => $nik,
-                                    'name'                 => $name,
-                                    'username'             => $username,
-                                    'email'                => $email,
-                                    'password'             => Hash::make('rsazra'),
-                                    'role_id'              => $role->id,
-                                    'organization_unit_id' => $orgUnit ? $orgUnit->id : null,
-                                ]);
-                            }
-
-                            if ($setAsHead && $orgUnit) {
-                                $orgUnit->update(['head_id' => $user->id]);
-                            }
-
-                            $imported++;
-                        } catch (\Exception $e) {
-                            $errors[] = "Baris {$rowNumber}: " . $e->getMessage();
+                            // Update cache
+                            $orgUnitCache[$organizationName] = $orgUnit->toArray();
                         }
                     }
 
+                    // --- Role (cached) ---
+                    $roleSlug = strtolower(str_replace(' ', '_', $roleName));
+                    if (isset($roleCache[$roleSlug])) {
+                        $role = Role::find($roleCache[$roleSlug]['id']);
+                    } else {
+                        $role = Role::firstOrCreate(
+                            ['name' => $roleSlug],
+                            ['display_name' => $roleName, 'description' => "Role {$roleName}"]
+                        );
+                        if ($role->wasRecentlyCreated && !empty($managerPermissions)) {
+                            $role->permissions()->sync($managerPermissions);
+                        }
+                        $roleCache[$roleSlug] = $role->toArray();
+                    }
+
+                    // --- Username (unique) ---
+                    $nameWithoutTitle = $this->extractNameWithoutTitle($name);
+                    $baseUsername = strtolower(str_replace(' ', '.', preg_replace('/[^A-Za-z0-9\s]/', '', $nameWithoutTitle)));
+                    $username = $baseUsername;
+                    $counter  = 1;
+                    while (User::where('username', $username)->where('nik', '!=', $nik)->exists()) {
+                        $username = $baseUsername . $counter++;
+                    }
+
+                    // --- Email (unique) ---
+                    $email   = $username . '@azra.com';
+                    $counter = 1;
+                    while (User::where('email', $email)->where('nik', '!=', $nik)->exists()) {
+                        $email = $baseUsername . $counter++ . '@azra.com';
+                    }
+
+                    // --- Create or Update User ---
+                    $user = User::where('nik', $nik)->first();
+                    if ($user) {
+                        $user->update([
+                            'name'                 => $name,
+                            'username'             => $username,
+                            'email'                => $email,
+                            'role_id'              => $role->id,
+                            'organization_unit_id' => $orgUnit ? $orgUnit->id : null,
+                        ]);
+                    } else {
+                        $user = User::create([
+                            'nik'                  => $nik,
+                            'name'                 => $name,
+                            'username'             => $username,
+                            'email'                => $email,
+                            'password'             => Hash::make('rsazra'),
+                            'role_id'              => $role->id,
+                            'organization_unit_id' => $orgUnit ? $orgUnit->id : null,
+                        ]);
+                    }
+
+                    if ($setAsHead && $orgUnit) {
+                        $orgUnit->update(['head_id' => $user->id]);
+                    }
+
                     DB::commit();
+                    $imported++;
                 } catch (\Exception $e) {
                     DB::rollBack();
-                    $errors[] = "Chunk error: " . $e->getMessage();
+                    $errors[] = "Baris {$rowNumber}: " . $e->getMessage();
                 }
             }
 
