@@ -47,10 +47,14 @@ class UserImportController extends Controller
 
     public function import(Request $request)
     {
+        // Prevent PHP from timing out during large imports
+        set_time_limit(0);
+        ini_set('memory_limit', '256M');
+
         try {
             // Validate file
             $validated = $request->validate([
-                'file' => 'required|file|mimes:xlsx,xls,csv|max:2048',
+                'file' => 'required|file|mimes:xlsx,xls,csv|max:10240',
                 'set_as_head' => 'nullable|boolean',
             ]);
 
@@ -63,146 +67,151 @@ class UserImportController extends Controller
 
             $setAsHead = $request->boolean('set_as_head');
 
-            DB::beginTransaction();
-
             $spreadsheet = IOFactory::load($file->getPathname());
             $worksheet = $spreadsheet->getActiveSheet();
             $rows = $worksheet->toArray();
 
-            array_shift($rows);
+            array_shift($rows); // Remove header row
 
             $imported = 0;
             $errors = [];
-            
-            // Get manager permissions for new roles
+
+            // --- Pre-load lookups into memory to minimize per-row DB queries ---
             $managerRole = Role::where('name', 'manager')->first();
-            $managerPermissions = $managerRole ? $managerRole->permissions()->pluck('permissions.id')->toArray() : [];
-            
-            // Fallback to dashboard permission if manager role not found
-            if (empty($managerPermissions)) {
-                $managerPermissions = Permission::whereIn('name', ['view_dashboard'])->pluck('id')->toArray();
-            }
+            $managerPermissions = $managerRole
+                ? $managerRole->permissions()->pluck('permissions.id')->toArray()
+                : Permission::whereIn('name', ['view_dashboard'])->pluck('id')->toArray();
 
-            foreach ($rows as $index => $row) {
-                $rowNumber = $index + 2;
+            // Cache: orgUnit name -> model, role slug -> model
+            $orgUnitCache = OrganizationUnit::all()->keyBy('name')->toArray();
+            $roleCache    = Role::all()->keyBy('name')->toArray();
 
-                if (empty(array_filter($row))) {
-                    continue;
-                }
+            $orgType = \App\Models\OrganizationType::where('name', 'department')->first();
+
+            // Process rows in chunks to avoid one giant transaction holding too many locks
+            $chunks = array_chunk($rows, 50);
+
+            foreach ($chunks as $chunk) {
+                DB::beginTransaction();
 
                 try {
-                    $nik = trim($row[1] ?? '');
-                    $name = trim($row[2] ?? '');
-                    $organizationName = trim($row[3] ?? '');
-                    $position = trim($row[4] ?? '');
-                    $roleName = trim($row[5] ?? 'staff');
+                    foreach ($chunk as $index => $row) {
+                        $rowNumber = $index + 2;
 
-                    if (!$nik || !$name) {
-                        $errors[] = "Baris {$rowNumber}: NIK dan Nama wajib diisi";
-                        continue;
-                    }
+                        if (empty(array_filter($row))) {
+                            continue;
+                        }
 
-                    // Find or create organization unit
-                    $orgUnit = null;
-                    if ($organizationName) {
-                        $orgUnit = OrganizationUnit::where('name', $organizationName)->first();
-                        
-                        if (!$orgUnit) {
-                            $orgType = \App\Models\OrganizationType::where('name', 'department')->first();
-                            
-                            if (!$orgType) {
-                                $errors[] = "Baris {$rowNumber}: Organization Type 'department' tidak ditemukan";
+                        try {
+                            $nik             = trim($row[1] ?? '');
+                            $name            = trim($row[2] ?? '');
+                            $organizationName = trim($row[3] ?? '');
+                            $roleName        = trim($row[5] ?? 'staff');
+
+                            if (!$nik || !$name) {
+                                $errors[] = "Baris {$rowNumber}: NIK dan Nama wajib diisi";
                                 continue;
                             }
-                            
-                            $baseCode = strtoupper(substr(preg_replace('/[^A-Za-z0-9]/', '', $organizationName), 0, 10));
-                            $code = $baseCode;
-                            $counter = 1;
-                            
-                            while (OrganizationUnit::where('code', $code)->exists()) {
-                                $code = $baseCode . $counter;
-                                $counter++;
+
+                            // --- Organization Unit (cached) ---
+                            $orgUnit = null;
+                            if ($organizationName) {
+                                if (isset($orgUnitCache[$organizationName])) {
+                                    $orgUnit = OrganizationUnit::find($orgUnitCache[$organizationName]['id']);
+                                } else {
+                                    if (!$orgType) {
+                                        $errors[] = "Baris {$rowNumber}: Organization Type 'department' tidak ditemukan";
+                                        continue;
+                                    }
+
+                                    $baseCode = strtoupper(substr(preg_replace('/[^A-Za-z0-9]/', '', $organizationName), 0, 10));
+                                    $code     = $baseCode;
+                                    $counter  = 1;
+                                    while (OrganizationUnit::where('code', $code)->exists()) {
+                                        $code = $baseCode . $counter++;
+                                    }
+
+                                    $orgUnit = OrganizationUnit::create([
+                                        'name'    => $organizationName,
+                                        'code'    => $code,
+                                        'type_id' => $orgType->id,
+                                    ]);
+
+                                    // Update cache
+                                    $orgUnitCache[$organizationName] = $orgUnit->toArray();
+                                }
                             }
-                            
-                            $orgUnit = OrganizationUnit::create([
-                                'name' => $organizationName,
-                                'code' => $code,
-                                'type_id' => $orgType->id,
-                            ]);
+
+                            // --- Role (cached) ---
+                            $roleSlug = strtolower(str_replace(' ', '_', $roleName));
+                            if (isset($roleCache[$roleSlug])) {
+                                $role = Role::find($roleCache[$roleSlug]['id']);
+                            } else {
+                                $role = Role::create([
+                                    'name'         => $roleSlug,
+                                    'display_name' => $roleName,
+                                    'description'  => "Role {$roleName}",
+                                ]);
+                                if (!empty($managerPermissions)) {
+                                    $role->permissions()->sync($managerPermissions);
+                                }
+                                $roleCache[$roleSlug] = $role->toArray();
+                            }
+
+                            // --- Username (unique) ---
+                            $nameWithoutTitle = $this->extractNameWithoutTitle($name);
+                            $baseUsername = strtolower(str_replace(' ', '.', preg_replace('/[^A-Za-z0-9\s]/', '', $nameWithoutTitle)));
+                            $username = $baseUsername;
+                            $counter  = 1;
+                            while (User::where('username', $username)->where('nik', '!=', $nik)->exists()) {
+                                $username = $baseUsername . $counter++;
+                            }
+
+                            // --- Email (unique) ---
+                            $email   = $username . '@azra.com';
+                            $counter = 1;
+                            while (User::where('email', $email)->where('nik', '!=', $nik)->exists()) {
+                                $email = $baseUsername . $counter++ . '@azra.com';
+                            }
+
+                            // --- Create or Update User ---
+                            $user = User::where('nik', $nik)->first();
+                            if ($user) {
+                                $user->update([
+                                    'name'                 => $name,
+                                    'username'             => $username,
+                                    'email'                => $email,
+                                    'role_id'              => $role->id,
+                                    'organization_unit_id' => $orgUnit ? $orgUnit->id : null,
+                                ]);
+                            } else {
+                                $user = User::create([
+                                    'nik'                  => $nik,
+                                    'name'                 => $name,
+                                    'username'             => $username,
+                                    'email'                => $email,
+                                    'password'             => Hash::make('rsazra'),
+                                    'role_id'              => $role->id,
+                                    'organization_unit_id' => $orgUnit ? $orgUnit->id : null,
+                                ]);
+                            }
+
+                            if ($setAsHead && $orgUnit) {
+                                $orgUnit->update(['head_id' => $user->id]);
+                            }
+
+                            $imported++;
+                        } catch (\Exception $e) {
+                            $errors[] = "Baris {$rowNumber}: " . $e->getMessage();
                         }
                     }
 
-                    // Find or create role
-                    $roleSlug = strtolower(str_replace(' ', '_', $roleName));
-                    $role = Role::where('name', $roleSlug)->first();
-                    
-                    if (!$role) {
-                        $role = Role::create([
-                            'name' => $roleSlug,
-                            'display_name' => $roleName,
-                            'description' => "Role {$roleName}",
-                        ]);
-                        
-                        // Assign manager permissions to new role
-                        if (!empty($managerPermissions)) {
-                            $role->permissions()->sync($managerPermissions);
-                        }
-                    }
-
-                    // Generate username from name (without titles)
-                    $nameWithoutTitle = $this->extractNameWithoutTitle($name);
-                    $username = strtolower(str_replace(' ', '.', preg_replace('/[^A-Za-z0-9\s]/', '', $nameWithoutTitle)));
-                    $baseUsername = $username;
-                    $counter = 1;
-                    
-                    while (User::where('username', $username)->where('nik', '!=', $nik)->exists()) {
-                        $username = $baseUsername . $counter;
-                        $counter++;
-                    }
-
-                    // Generate email
-                    $email = $username . '@azra.com';
-                    $counter = 1;
-                    while (User::where('email', $email)->where('nik', '!=', $nik)->exists()) {
-                        $email = $baseUsername . $counter . '@azra.com';
-                        $counter++;
-                    }
-
-                    // Create or update user
-                    $user = User::where('nik', $nik)->first();
-
-                    if ($user) {
-                        $user->update([
-                            'name' => $name,
-                            'username' => $username,
-                            'email' => $email,
-                            'role_id' => $role->id,
-                            'organization_unit_id' => $orgUnit ? $orgUnit->id : null,
-                        ]);
-                    } else {
-                        $user = User::create([
-                            'nik' => $nik,
-                            'name' => $name,
-                            'username' => $username,
-                            'email' => $email,
-                            'password' => Hash::make('rsazra'),
-                            'role_id' => $role->id,
-                            'organization_unit_id' => $orgUnit ? $orgUnit->id : null,
-                        ]);
-                    }
-
-                    // Set as organization head if toggle is on
-                    if ($setAsHead && $orgUnit) {
-                        $orgUnit->update(['head_id' => $user->id]);
-                    }
-
-                    $imported++;
+                    DB::commit();
                 } catch (\Exception $e) {
-                    $errors[] = "Baris {$rowNumber}: " . $e->getMessage();
+                    DB::rollBack();
+                    $errors[] = "Chunk error: " . $e->getMessage();
                 }
             }
-
-            DB::commit();
 
             if (!empty($errors)) {
                 return redirect()->route('users.import')
@@ -217,7 +226,6 @@ class UserImportController extends Controller
                 ->withErrors($e->errors())
                 ->withInput();
         } catch (\Exception $e) {
-            DB::rollBack();
             return redirect()->route('users.import')
                 ->with('error', 'Gagal mengimport file: ' . $e->getMessage());
         }
