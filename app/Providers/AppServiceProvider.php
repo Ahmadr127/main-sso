@@ -3,6 +3,7 @@
 namespace App\Providers;
 
 use Illuminate\Support\ServiceProvider;
+use Illuminate\Support\Facades\URL;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -31,5 +32,10 @@ class AppServiceProvider extends ServiceProvider
         \Laravel\Passport\Passport::tokensExpireIn(now()->addDays(1));
         \Laravel\Passport\Passport::refreshTokensExpireIn(now()->addDays(30));
         \Laravel\Passport\Passport::personalAccessTokensExpireIn(now()->addMonths(6));
+
+        // Force HTTPS jika di set di .env (untuk mengatasi warning form submission not secure di production)
+        if (env('FORCE_HTTPS', false)) {
+            URL::forceScheme('https');
+        }
     }
 }
